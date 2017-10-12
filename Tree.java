@@ -1,397 +1,444 @@
-//This file written by Don Landrum
-import java.util.*;
-public class Tree {
-	public class Node {
-		int value;
-		boolean isRed;
-		Node parent;
-		Node left;
-		Node right;
-		public Node() {
-			value = -1234567;
-			isRed = false;
-			parent = null;
-			left = null;
-			right = null;
+// Written by Don Landrum on October 10, 2017 for personal use
+public class Tree <T extends Comparable<T>> {
+	public static final int DUMMY_VALUE = -1;
+	// This is the class that stores and manipulates the Red-Black tree data structure.
+	// It uses a Comparable T so that different types of data could be stored in the structure.
+	private class Node {
+		private T data; //Comparable T data
+		private boolean isBlack; //color
+		private Node left; //left child node
+		private Node right; //right child node
+		private Node parent; //parent node
+		public Node() { //creates a leaf
+			this.data = null;
+			this.isBlack = true; //black node
+			this.left = null;
+			this.right = null;
+			this.parent = null;
 		}
-		public Node(int aValue) {
-			value = aValue;
-			isRed = false;
-			parent = null;
-			left = null;
-			right = null;
+		public Node(T data) { //creates a red node ready to be inserted
+			this.data = data;
+			this.isBlack = false; //red node
+			this.left = new Node(); //left child is a leaf
+			this.right = new Node(); //right child is a leaf
+			this.parent = null;
+			this.left.parent = this; //leaf recognizes this
+			this.right.parent = this; //leaf recognizes this
 		}
-	}
-	public class Check {
-		int checks;
-		boolean contained;
-		public Check() {
-			checks = 0;
-			contained = false;
-		}
-		String ToString() {
-			String s = contained + ", " + checks + " checks.";
-			return s;
+		public boolean isLeaf() { //decides whether the node is a leaf
+			return (this.isBlack && this.data == null && this.left == null && this.right == null);
 		}
 	}
-	Node root;
+	private Node root; //used to navigate structure throughout code
+	private int blackHeight; //calculated at various points in the code
 	public Tree() {
-		root = null;
+		this.root = new Node(); //creates a leaf at the root
+		this.blackHeight = DUMMY_VALUE;
 	}
-	String Search(int aValue) {
-		Check aCheck = new Check();
-		String s = aValue + ": " + Search(root, aValue, aCheck).ToString();
-		return s;
-	}
-	Check Search(Node aNode, int aValue, Check aCheck) {
-		aCheck.checks++;
-		if (aNode == null) {
-			aCheck.contained = false;
-			return aCheck;
-		}
-		if (aNode.value == aValue) {
-			aCheck.contained = true;
-			return aCheck;
-		}
-		if (aNode.value < aValue) {
-			return Search(aNode.right, aValue, aCheck);
+	public T add(T input) { //publicly accessible add method
+		if (this.root.isLeaf()) { //if the root is a leaf
+			Node n = new Node(input);
+			n.isBlack = true; //root is black
+			this.root = n;
+			return input;
 		}
 		else {
-			return Search(aNode.left, aValue, aCheck);
+			return add(this.root, input); //helper method
 		}
 	}
-	void Delete(int aValue) {
-		Delete(root, aValue);
+	public T remove(T target) { //publicly accessible remove method
+		return remove(this.root, target); //helper method
 	}
-	void Delete(Node aNode, int aValue) {
-		/*
-		 * if it has only left children, I reroute its left children
-		 * if it has only right children, i reroute those
-		 * if it has no children, it is dead
-		 * if it has both children, I find its replacement, replace it, then recursively delete its replacement
-		 * 
-		 */
-		if (aNode == null) {
-			System.out.println("Not contained");
-			return;
+	public String search(T target) { //publicly accessible search method
+		return search(this.root, target, 0); //helper method
+	}
+	public boolean isValid() { //checks to see if the tree meets the requirements
+		boolean rootBlack = this.root.isBlack; //is the root black?
+		boolean leavesBlack = AllLeavesAreBlack(this.root); //are all the leaves black?
+		boolean redBlack = EveryRedNodeHasBlackChildren(this.root); //do all red nodes have black children?
+		this.blackHeight = DUMMY_VALUE; //reset black height to dummy value
+		boolean uniform = BlackHeightIsUniform(this.root, 0); //is the black height uniform across all leaves?
+		return (rootBlack && leavesBlack && redBlack && uniform);
+	}
+	public int getBlackHeight() {
+		this.blackHeight = DUMMY_VALUE; //resets this.blackHeight
+		if (BlackHeightIsUniform(this.root, 0)) { //calculates this.blackHeight
+			return this.blackHeight;
 		}
-		if (aNode.value == aValue) {
-			if (aNode == root) {
-				//special case
+		System.out.println("Black height is not uniform.");
+		return DUMMY_VALUE; //if the black height isn't uniform, return an obviously wrong answer
+	}
+	public void printPreOrder() { //publicly accessible pre-order traversal
+		//this method is never used in my driver, but it is quite useful for debugging
+		printPreOrder(this.root); //helper method
+	}
+	private T add(Node node, T input) { //helper method
+		if (node.isLeaf()) { //found a place to insert the input
+			//create a full node with input and replace node with n
+			Node n = new Node(input);
+			n.parent = node.parent;
+			if (n.parent.right == node) {
+				n.parent.right = n;
 			}
-			if (aNode.right == null && aNode.left == null) {
-				if (aNode.parent.left == aNode) {
-					aNode.parent.left = null;
+			else {
+				n.parent.left = n;
+			}
+			fixAdd(n); //restructure the tree
+			return input;
+		}
+		else if (node.data.compareTo(input) < 0.0) { //go right if input > node.data
+			return add(node.right, input);
+		}
+		else if (node.data.compareTo(input) > 0.0){ // go left if input < node.data
+			return add(node.left, input);
+		}
+		else { //return null if input is a duplicate value
+			return null;
+		}
+	}
+	private T remove(Node node, T input) { //helper method
+		if (node.isLeaf()) { //input is not in the tree; return null
+			return null;
+		}
+		if (node.data.compareTo(input) == 0) { //found input
+			if (!node.left.isLeaf() && !node.right.isLeaf()) { //node has two non-leaf children
+				Node replacement = node.right;
+				while (!replacement.left.isLeaf()) {
+					replacement = replacement.left;
+				}
+				//replacement is the smallest node larger than node, and replacement has no left child
+				node.data = replacement.data; //fill in node with replacement's data, effectively removing node
+				remove(replacement, replacement.data); //recursive remove call on replacement
+				return input;
+			}
+			//at this point, we have at most one non-leaf children
+			if (!node.isBlack) { //must have two leaves, and node cannot be root
+				//since node is red, we can delete it without worry
+				if (node.parent.right == node) {
+					node.parent.right = node.right;
 				}
 				else {
-					aNode.parent.right = null;
+					node.parent.left = node.right;
 				}
+				node.right.parent = node.parent;
+				return input;
 			}
-			else if (aNode.right != null && aNode.left == null) {
-				if (aNode.parent.left == aNode) {
-					aNode.parent.left = aNode.right;
-				}
-				else {
-					aNode.parent.right = aNode.right;
-				}
-				aNode.right.parent = aNode.parent;
-			}
-			else if (aNode.left != null && aNode.right == null) {
-				if (aNode.parent.left == aNode) {
-					aNode.parent.left = aNode.left;
-				}
-				else {
-					aNode.parent.right = aNode.left;
-				}
-				aNode.left.parent = aNode.parent;
-			}
-			else {
-				Node target = aNode.right;
-				while (target.left != null) {
-					target = target.left;
-				}
-				aNode.value = target.value;
-				Delete(aNode.right, target.value);
-				
-/*				
-				target.parent.left = target.right;
-				target.right.parent = target.parent;
-				if (aNode.parent.left == aNode) {
-					aNode.parent.left = target;
-				}
-				else {
-					aNode.parent.right = target;
-				}
-				target.parent = aNode.parent;
-				target.left = aNode.left;
-				target.right = aNode.right;
-				*/
-			}
-		}
-		else if (aNode.value < aValue) {
-			Delete(aNode.right, aValue);
-		}
-		else {
-			Delete(aNode.left, aValue);
-		}
-	}
-	void Add(int aValue) {
-		Node aNode = new Node(aValue);
-		if (root == null) {
-			aNode.isRed = false;
-			root = aNode;
-		}
-		else {
-			aNode.isRed = true;
-			Add(aNode, root);
-		}
-	}
-	void Add(Node aNode, Node aParent) {
-		if (aNode.value < aParent.value) {
-			if (aParent.left != null) {
-				Add(aNode, aParent.left);
-			}
-			else {
-				aParent.left = aNode;
-				aNode.parent = aParent;
-				//check for validity
-				CheckForValidity(aNode, aParent);
-			}
-		}
-		else if (aNode.value > aParent.value) {
-			if (aParent.right != null) {
-				Add(aNode, aParent.right);
-			}
-			else {
-				aParent.right = aNode;
-				aNode.parent = aParent;
-				//check for validity
-				CheckForValidity(aNode, aParent);
-			}
-		}
-		else {
-			System.out.println("Cannot add, for this value already exists in this tree");
-		}
-	}
-	void CheckForValidity(Node aNode, Node aParent) {
-		//I assume that aNode and aParent are valid
-		Node aGrand = new Node();
-		if (aParent.parent != null)
-			aGrand = aParent.parent;
-		else {
-			// there is no grandparent, so there is no uncle either, aParent is the root
-			if (aNode.isRed == true && aParent.isRed == false) {
-				//we're good, don't do anything
-			}
-			else if (aNode.isRed && aParent.isRed) {
-				aParent.isRed = false;
-			}
-			else {
-				System.out.println("This shouldn't have happened. K should be red. Top error.");
-				System.out.println("K, P:" + aNode.value + ", " + aParent.value);
-			}
-			return;
-		}
-		if (aNode.isRed == true && aParent.isRed == false) {
-			//we're good, don't do anything
-		}
-		else if (aNode.isRed == true && aParent.isRed == true) {
-			//double red
-			//if aNode's uncle is red too, we just recolor
-			//if not, we have to shift stuff all around
-			if (aGrand.left != null && aGrand.right != null && aGrand.left.isRed == true && aGrand.right.isRed == true) {
-				if (aGrand.isRed)
-					System.out.println("Major recolor error");
-				//recolor
-//				RecolorFromRoot(aGrand);
-				aGrand.left.isRed = false;
-				aGrand.right.isRed = false;
-				aGrand.isRed = true;
-				if (aGrand.parent == null) {
-					aGrand.isRed = false; //TODO probably not all the way right, not sure whether to comment out this line
-					//RecolorFromRoot();						
-					//this means aGrand is the root and it is currently red
-					//make a function to recolor everything going all the way down, starting at the root
-				}
-				else 
-					CheckForValidity(aGrand, aGrand.parent);
-			}
-			else {
-				if (aGrand.left != null && aGrand.left == aParent) { //P left of G
-					if (aParent.left != null && aParent.left == aNode) { //K left of P
-						aGrand.isRed = true;
-						aParent.isRed = false;
-						aGrand.left = aParent.right;
-						if (aParent.right != null)
-							aParent.right.parent = aGrand;
-						aParent.right = aGrand;
-						//G's parent needs to recognize P
-						if (aGrand.parent != null) {
-							if (aGrand.parent.right != null && aGrand.parent.right == aGrand)
-								aGrand.parent.right = aParent;
-							else
-								aGrand.parent.left = aParent;
-							aParent.parent = aGrand.parent;
-						}
-						else { //here we reset the root
-							root = aParent;
-							aParent.parent = null;
-						}
-						aGrand.parent = aParent;
-/*
- * I've got red K, red P, black G, and black S
- * I want to shift P to the top, G to its right child, K to its left child (still)
- * P becomes black, G becomes red
- * P.right becomes G.left
- */
+			if (!node.left.isBlack || !node.right.isBlack) { //node is black but has a red child and a leaf
+				//node can be replaced with its red child if said child is recolored black
+				if (!node.left.isBlack) { //left child is red, right child is black leaf
+					if (node.parent == null) { //node is root
+						node.left.parent = null;
+						node.left.isBlack = true; //root is always black
+						this.root = node.left; //node's left child becomes the root
 					}
-					else { //K right of P
-						aNode.isRed = false;
-						aGrand.isRed = true;
-						//G's parent needs to recognize K
-						if (aGrand.parent != null) {
-							aNode.parent = aGrand.parent;
-							if (aGrand.parent.right != null && aGrand.parent.right == aGrand)
-								aGrand.parent.right = aNode;
-							else
-								aGrand.parent.left = aNode;
-						}
-						else { //reset root
-							root = aNode;
-							aNode.parent = null;
-						}
-						aGrand.left = aNode.right;
-						if (aNode.right != null)
-							aNode.right.parent = aGrand;
-						aNode.right = aGrand;
-						aGrand.parent = aNode;
-						aParent.right = aNode.left;
-						if (aNode.left != null)
-							aNode.left.parent = aParent;
-						aNode.left = aParent;
-						aParent.parent = aNode;						
-/*
- * I've got red K, red P, black G, and black S
- * I want K on top, K is black, K.left = P, K.right = G, P is red (still), G is red
- */
-					}
-				}
-				else { //P right of G
-					if (aParent.left != null && aParent.left == aNode) { //K left of P
-						aNode.isRed = false;
-						aGrand.isRed = true;
-						//G's parent needs to recognize K
-						if (aGrand.parent != null) {
-							aNode.parent = aGrand.parent;
-							if (aGrand.parent.right != null && aGrand.parent.right == aGrand)
-								aGrand.parent.right = aNode;
-							else
-								aGrand.parent.left = aNode;
-						}
-						else {  //reassign the root
-							aNode.parent = null;
-							root = aNode;
-						}
-						
-						aGrand.right = aNode.left;
-						if (aNode.left != null)
-							aNode.left.parent = aGrand;
-						aParent.left = aNode.right;
-						if (aNode.right != null)
-							aNode.right.parent = aParent;
-						aNode.right = aParent;
-						aParent.parent = aNode;
-						aNode.left = aGrand;
-						aGrand.parent = aNode;
-/*
- * I've got black S, black G, red P, and red K, K left of P
- * K goes to top, K is black, K.left = G, G is red, K.right = P
- */
-					}
-					else { //K right of P
-						aGrand.isRed = true; //TODO I tried changing to false, but that made it go haywire
-						aParent.isRed = false;
-						aGrand.right = aParent.left;
-						if (aParent.left != null)
-							aParent.left.parent = aGrand;
-						aParent.left = aGrand;
-						if (aGrand.parent != null) {
-							aParent.parent = aGrand.parent;
-							//G's parent needs to recognize P
-							if (aGrand.parent.right != null && aGrand.parent.right == aGrand)
-								aGrand.parent.right = aParent;
-							else
-								aGrand.parent.left = aParent;
+					else {
+						//safely replace node with node.left
+						if (node.parent.right == node) {
+							node.parent.right = node.left;
 						}
 						else {
-							root = aParent;
-							aParent.parent = null;
+							node.parent.left = node.left;
 						}
-						aGrand.parent = aParent;
-/*
- * I've got black S, black G, red P, and red K, k right of P
- * P goes to top, P.r = K (still), P.l = G, G is red, G.r = P.l
- */
+						node.left.parent = node.parent;
+						node.left.isBlack = true;
 					}
+				}
+				else { //right child is red, left child is black leaf
+					if (node.parent == null) { //node is root
+						node.right.parent = null;
+						node.right.isBlack = true; //root is black
+						this.root = node.right; //node's right child is root
+					}
+					else {
+						//safely replace node with node.right
+						if (node.parent.right == node) {
+							node.parent.right = node.right;
+						}
+						else {
+							node.parent.left = node.right;
+						}
+						node.right.parent = node.parent;
+						node.right.isBlack = true;
+					}
+				}
+				return input;
+			}
+			//node to delete is black and has two leaf children
+			fixDelete(node); //make the tree able to survive the deletion
+			if (node.parent == null) { //make deletion if node is root
+				this.root = node.right;
+				node.right.parent = null;
+			}
+			else { //make deletion otherwise
+				if (node.parent.left == node) {
+					node.parent.left = node.right;
+				}
+				else {
+					node.parent.right = node.right;
+				}
+				node.right.parent = node.parent;
+			}
+			return input;
+		}
+		else if (node.data.compareTo(input) < 0) { //keep looking right
+			return remove(node.right, input);
+		}
+		else { //keep looking left
+			return remove(node.left, input);
+		}
+	}
+	private String search(Node node, T input, int checks) { //helper method
+		++checks; //increment the counter
+		if (node.isLeaf()) { //not contained
+			return ("Not found: "+checks+" checks");
+		}
+		if (node.data.compareTo(input) == 0) { //found
+			return ("Found: "+checks+" checks");
+		}
+		if (node.data.compareTo(input) < 0) { //look right
+			return search(node.right, input, checks);
+		}
+		else { //look left
+			return search(node.left, input, checks);
+		}
+	}
+	private boolean AllLeavesAreBlack(Node node) { //requirement testing
+		if (node.isLeaf()) { //if node.isLeaf(), then node must be a leaf that is black
+			return true;
+		}
+		if ((node.left == null || node.right == null || node.data == null) && !node.isBlack) {
+			//only leaves should meet these qualities, so any red node with such qualities is illegal
+			return false;
+		}
+		return (AllLeavesAreBlack(node.left) && AllLeavesAreBlack(node.right)); //look left and right before returning
+	}
+	private boolean EveryRedNodeHasBlackChildren(Node node) { //requirement testing
+		if (node.isLeaf()) { //halting condition
+			return true;
+		}
+		if (!node.isBlack && (!node.left.isBlack || !node.right.isBlack)) {
+			//a red node cannot have any red children
+			return false;
+		}
+		//look left and right before returning
+		return (EveryRedNodeHasBlackChildren(node.left) && EveryRedNodeHasBlackChildren(node.right));
+	}
+	private boolean BlackHeightIsUniform(Node node, int height) { //requirement testing
+		if (node.isBlack) { //increment the counter
+			++height;
+		}
+		if (node.isLeaf()) { //done calculating
+			if (this.blackHeight == DUMMY_VALUE) { //this.blackHeight hasn't been set yet
+				this.blackHeight = height; //set it
+				return true;
+			}
+			else {
+				if (this.blackHeight == height) { //everything is uniform so far
+					return true;
+				}
+				else { //irregularity spotted
+					return false;
 				}
 			}
 		}
-		else {
-			System.out.println("This shouldn't have happened. K should be red. Bottom error.");
-			System.out.println("K, P:" + aNode.value + ", " + aParent.value);
+		//look left and right before returning
+		return (BlackHeightIsUniform(node.left, height) && BlackHeightIsUniform(node.right, height));
+	}
+	private void leftRotation(Node node) { //helper method
+		if (node.isLeaf() || node.right.isLeaf()) { //cannot rotate from such a position
+			System.out.println("Left rotation called in error.");
+			return;
+		}
+		if (node.parent != null) { //node.right is taking node's place at the higher level in the tree
+			if (node.parent.right == node) {
+				node.parent.right = node.right;
+			}
+			else {
+				node.parent.left = node.right;
+			}
+		}
+		else { //node is the current root, node.right should be the new one
+			this.root = node.right;
+		}
+		node.right.parent = node.parent; //make node.right recognize its new parent
+		node.right.left.parent = node; //make node's new right child recognize node
+		node.parent = node.right; //node.right moves to node.parent
+		node.right = node.right.left; //node recognizes its new right child
+		node.parent.left = node; //node's new parent recognizes node
+	}
+	private void rightRotation(Node node) { //helper method
+		if (node.isLeaf() || node.left.isLeaf()) { //cannot rotate from such a position
+			System.out.println("Right rotation called in error.");
+			return;
+		}
+		if (node.parent != null) { //node.left is taking node's place at the higher level in the tree
+			if (node.parent.right == node) {
+				node.parent.right = node.left;
+			}
+			else {
+				node.parent.left = node.left;
+			}
+		}
+		else { //node is the current root, node.left should be the new one
+			this.root = node.left;
+		}
+		node.left.parent = node.parent; //make node.left recognize its new parent
+		node.left.right.parent = node; //make node's new left child recognize node
+		node.parent = node.left; //node.left moves to node.parent
+		node.left = node.left.right; //node recognizes its new left child
+		node.parent.right = node; //node's new parent recognizes node
+	}
+	private void fixAdd(Node node) { //balancing method
+		//if this method was called, node should be red and not a leaf
+		if (node.isBlack || node.isLeaf()) {
+			System.out.println("fixAdd called in error.");
+			return;
+		}
+		if (node.parent == null) { //node is the root
+			node.isBlack = true; //the root is always black
+			return;
+		}
+		//we will only have a problem that requires restructuring if parent is red, as that violates that red-red restriction
+		if (!node.parent.isBlack) { //parent is red, so grandparent exists and is black
+			Node grandparent = node.parent.parent;
+			if (!grandparent.left.isBlack && !grandparent.right.isBlack) { //both children of grandparent are red
+				//we can make grandparent red and both of its kids black. This fixes the original problem of node vs node.parent.
+				//However, grandparent may now be in conflict with its parent, so we have to call fixAdd on grandparent
+				grandparent.left.isBlack = true; //first child is black
+				grandparent.right.isBlack = true; //second child is black
+				grandparent.isBlack = false; //grandparent is red
+				fixAdd(grandparent); //call balancing method on grandparent
+			}
+			else { //one of the children of the grandparent is black and the other is red (the red one is node's parent)
+				if (grandparent.left.right == node) { //we want node on the outside, not the inside, so rotate outwards = left
+					leftRotation(grandparent.left);
+				}
+				else if (grandparent.right.left == node) { //we want node on the outside, not the inside, so rotate outwards = right
+					rightRotation(grandparent.right);
+				}
+				if (grandparent.left == node || grandparent.left.left == node) { //node is on the left side of grandparent
+					//both grandparent.left and grandparent.left.left are red
+					grandparent.isBlack = false; //grandparent is red
+					grandparent.left.isBlack = true; //grandparent.left is black
+					rightRotation(grandparent);
+					//now there are no two bordering red nodes
+				}
+				else { //node is on the right side of grandparent
+					//both grandparent.right and grandparent.right.right are red
+					grandparent.isBlack = false; //grandparent is red
+					grandparent.right.isBlack = true; //grandparent.right is black
+					leftRotation(grandparent);
+					//now there are no two bordering red nodes
+				}
+			}
 		}
 	}
-	void RecolorFromRoot() {
-		if (root.isRed) {
-			RecolorFromRoot(root);
+	private void fixDelete(Node node) { //balancing method
+		//make the given node able to be safely deleted
+		//if this method was called, node should be black and not a leaf
+		if (!node.isBlack || node.isLeaf()) {
+			System.out.println("fixDelete called in error.");
+			return;
 		}
-		else {
-			System.out.println("Recolor From Root was called in error");
+		//if node is the root, deleting it is not a problem because this will affect every node's black height equally
+		if (node.parent == null) {
+			return;
+		}
+		//node has a parent, which means it must have a non-leaf sibling
+		Node sibling;
+		if (node.parent.left == node) { //node is the left child of its parent
+		  sibling = node.parent.right;
+		  //we know that having node.parent be red is a desirable situation for balancing
+		  //if node.parent is black and sibling is red, we can rotate left at node.parent and recolor to get the favorable orientation
+		  //we also need to reassign sibling based on the rotation
+		  if (!sibling.isBlack) { //sibling is red, so node.parent cannot be
+		    sibling.isBlack = true; //sibling becomes black
+		    node.parent.isBlack = false; //parent becomes red
+		    sibling = sibling.left; //sibling's left child becomes new sibling
+		    leftRotation(node.parent);
+		  }
+		  //if sibling, parent, and both of sibling's children are all black, recoloring sibling red will make the parent subtree stable
+		  //however, parent will now be out of alignment with the rest of the tree, so the method will be called again on parent
+		  //after parent is fixed, the tree will be aligned and our balancing work will be done
+		  if (sibling.isBlack && sibling.left.isBlack && sibling.right.isBlack && node.parent.isBlack) {
+		    sibling.isBlack = false; //sibling is red, and everything under node.parent has the same blackHeight
+		    fixDelete(node.parent); //call the method again on node.parent
+		    return;
+		  }
+		  //if parent is red and sibling and its children are black, we can add one black node to the node's path by swapping the colors of parent and sibling
+		  //this will not affect the black height of sibling or any other nodes, so we are done balancing
+		  if (!node.parent.isBlack && sibling.left.isBlack && sibling.right.isBlack) {
+		    node.parent.isBlack = true; //parent becomes black
+		    sibling.isBlack = false; //sibling becomes red
+		    return;
+		  }
+		  //if sibling has one red child and one black child, we want the red one to be on the outside for future rotation purposes.
+		  //We can rotate right and recolor to preserve the validity of the tree, and we need to reassign the sibling after the rotation
+		  if (sibling.isBlack && !sibling.left.isBlack && sibling.right.isBlack) {
+		    sibling.left.isBlack = true; //inner red child becomes black
+		    sibling.isBlack = false; //sibling (future sibling.right) becomes red
+		    rightRotation(sibling);
+		    sibling = node.parent.right; //reassign sibling
+		  }
+		  //the final possibility is that sibling is black and has a red outer (right) child.
+		  //We can then rotate left on parent and recolor to preserve the structure of the tree.
+		  if (sibling.isBlack && !sibling.right.isBlack) {
+		    sibling.right.isBlack = true; //red outer child becomes black
+		    sibling.isBlack = node.parent.isBlack; //sibling takes parent's color
+		    node.parent.isBlack = true; //parent is black
+		    leftRotation(node.parent);
+		  }
+		}
+		else { //node is the right child of its parent
+		  sibling = node.parent.left;
+		  //we know that having node.parent be red is a desirable situation for balancing
+		  //if node.parent is black and sibling is red, we can rotate right at node.parent and recolor to get the favorable orientation
+		  //we also need to reassign sibling based on the rotation
+		  if (!sibling.isBlack) { //sibling is red, so node.parent cannot be
+		    sibling.isBlack = true; //sibling becomes black
+		    node.parent.isBlack = false; //parent becomes red
+		    sibling = sibling.right; //sibling's right child becomes new sibling
+		    rightRotation(node.parent);
+		  }
+		  //if sibling, parent, and both of sibling's children are all black, recoloring sibling red will make the parent subtree stable
+		  //however, parent will now be out of alignment with the rest of the tree, so the method will be called again on parent
+		  //after parent is fixed, the tree will be aligned and our balancing work will be done
+		  if (sibling.isBlack && sibling.left.isBlack && sibling.right.isBlack && node.parent.isBlack) {
+		    sibling.isBlack = false; //sibling is red, and everything under node.parent has the same blackHeight
+		    fixDelete(node.parent); //call the method again on node.parent
+		    return;
+		  }
+		  //if parent is red and sibling and its children are black, we can add one black node to the node's path by swapping the colors of parent and sibling
+		  //this will not affect the black height of sibling or any other nodes, so we are done balancing
+		  if (!node.parent.isBlack && sibling.left.isBlack && sibling.right.isBlack) {
+		    node.parent.isBlack = true; //parent becomes black
+		    sibling.isBlack = false; //sibling becomes red
+		    return;
+		  }
+		  //if sibling has one red child and one black child, we want the red one to be on the outside for future rotation purposes.
+		  //We can rotate left and recolor to preserve the validity of the tree, and we need to reassign the sibling after the rotation
+		  if (sibling.isBlack && sibling.left.isBlack && !sibling.right.isBlack) {
+		    sibling.right.isBlack = true; //inner red child becomes black
+		    sibling.isBlack = false; //sibling (future sibling.left) becomes red
+		    leftRotation(sibling);
+		    sibling = node.parent.left; //reassign sibling
+		  }
+		  //the final possibility is that sibling is black and has a red outer (left) child.
+		  //We can then rotate right on parent and recolor to preserve the structure of the tree.
+		  if (sibling.isBlack && !sibling.left.isBlack) {
+		    sibling.left.isBlack = true; //red outer child becomes black
+		    sibling.isBlack = node.parent.isBlack; //sibling takes parent's color
+		    node.parent.isBlack = true; //parent is black
+		    rightRotation(node.parent);
+		  }
 		}
 	}
-	void RecolorFromRoot(Node aNode) {
-		//this method assumes that the color on aNode is correct, and changes the colors of its children accordingly
-		//this method isn't restructuring my tree correctly
-		if (aNode != null) {
-			if (aNode.isRed)
-				aNode.isRed = false;
-			else
-				aNode.isRed = true;
-			RecolorFromRoot(aNode.right);
-			RecolorFromRoot(aNode.left);
+	private void printPreOrder(Node node) { //helper method
+		if (node.isLeaf()) { //halting condition
+			return;
 		}
-	}
-	void InOrderTraversal() {
-		System.out.println("In-order");
-		InOrderTraversal(root);
-	}
-	void PreOrderTraversal() {
-		System.out.println("Pre-order");
-		PreOrderTraversal(root);
-	}
-	void PostOrderTraversal() {
-		System.out.println("Post-order");
-		PostOrderTraversal(root);
-	}
-	void InOrderTraversal(Node aNode) {
-		if (aNode != null) {
-			InOrderTraversal(aNode.left);
-			System.out.println(aNode.value + " " + aNode.isRed);
-			InOrderTraversal(aNode.right);
-		}
-	}
-	void PreOrderTraversal(Node aNode) {
-		if (aNode != null) {
-			System.out.println(aNode.value + " " + aNode.isRed);
-			PreOrderTraversal(aNode.left);
-			PreOrderTraversal(aNode.right);
-		}
-	}
-	void PostOrderTraversal(Node aNode) {
-		if (aNode != null) {
-			PostOrderTraversal(aNode.left);
-			PostOrderTraversal(aNode.right); 
-			System.out.println(aNode.value + " " + aNode.isRed);
-		}
+		System.out.println(node.data+", "+node.isBlack); //print the current node
+		printPreOrder(node.left); //explore the left subtree
+		printPreOrder(node.right); //explore the right subtree
 	}
 }
